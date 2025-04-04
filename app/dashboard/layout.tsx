@@ -3,18 +3,19 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { 
-  Car, 
-  Users, 
-  Calendar, 
-  Settings, 
-  LogOut, 
-  Menu, 
-  X, 
-  Home, 
-  User, 
-  BarChart3, 
-  DollarSign 
+import {
+  Car,
+  Users,
+  Calendar,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Home,
+  User,
+  BarChart3,
+  DollarSign,
+  CarFront
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,11 @@ export default function DashboardLayout({ children }: SidebarProps) {
       href: "/dashboard/bookings",
       icon: Calendar,
       title: "Bookings",
+    },
+    {
+      href: "/dashboard/rentals",
+      icon: CarFront,
+      title: "Rentals",
     },
     {
       href: "/dashboard/vehicles",
