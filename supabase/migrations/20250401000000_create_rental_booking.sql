@@ -1,7 +1,7 @@
 -- Create rental_booking table
 CREATE TABLE rental_booking (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users NOT NULL,
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   pickup_location TEXT NOT NULL,
   pickup_place_id TEXT NOT NULL,
   pickup_date DATE NOT NULL,

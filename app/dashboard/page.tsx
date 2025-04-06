@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Overview } from "@/components/dashboard/overview";
 import { RecentBookings } from "@/components/dashboard/recent-bookings";
+import { RecentRentalBookings } from "@/components/dashboard/recent-rental-bookings";
 import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 
 export default function DashboardPage() {
@@ -48,6 +49,18 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <RecentBookings />
+              </CardContent>
+            </Card>
+            
+            <Card className="lg:col-span-3 mt-4">
+              <CardHeader>
+                <CardTitle>Recent Rental Bookings</CardTitle>
+                <CardDescription>
+                  Latest vehicle rental activities
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RecentRentalBookings />
               </CardContent>
             </Card>
           </div>

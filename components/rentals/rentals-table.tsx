@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -54,6 +54,440 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+
+interface EditRentalDialogProps {
+  rental: Rental | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (updatedRental: Rental) => void;
+}
+
+interface ViewRentalDialogProps {
+  rental: Rental | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function EditRentalDialog({ rental, open, onOpenChange, onSave }: EditRentalDialogProps) {
+  const [editedRental, setEditedRental] = useState<Rental | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (rental) {
+      setEditedRental({ ...rental });
+    }
+  }, [rental]);
+
+  if (!editedRental) return null;
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      
+      // First update rental booking
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('rental_booking')
+        .update({
+          status: editedRental.status,
+          pickup_location: editedRental.pickup_location,
+          pickup_date: editedRental.pickup_date,
+          pickup_time: editedRental.pickup_time,
+          total_price: editedRental.total_price,
+          discounted_price: editedRental.discounted_price
+        })
+        .eq('id', editedRental.id)
+        .select(`
+          *,
+          user:user_id (
+            first_name,
+            last_name,
+            email
+          ),
+          rental_payments (
+            id,
+            status
+          )
+        `)
+        .single();
+
+      if (bookingError) throw bookingError;
+      
+      if (bookingData) {
+        // Update payment status if changed
+        if (editedRental.payment_status !== bookingData.rental_payments[0]?.status) {
+          const { error: paymentError } = await supabase
+            .from('rental_payments')
+            .update({
+              status: editedRental.payment_status
+            })
+            .eq('id', bookingData.rental_payments[0]?.id);
+
+          if (paymentError) throw paymentError;
+        }
+
+        onSave(bookingData as Rental);
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error('Error updating rental:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Edit Rental</DialogTitle>
+          <DialogDescription>
+            Update the rental details below
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Rental ID</Label>
+            <div className="col-span-3">
+              <Input value={editedRental.rental_code} disabled />
+            </div>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Status</Label>
+            <Select
+              value={editedRental.status}
+              onValueChange={(value) => setEditedRental({ ...editedRental, status: value })}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Payment Status</Label>
+            <Select
+              value={editedRental.payment_status}
+              onValueChange={(value) => setEditedRental({ ...editedRental, payment_status: value })}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select payment status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PENDING">PENDING</SelectItem>
+                <SelectItem value="COMPLETED">COMPLETED</SelectItem>
+                <SelectItem value="FAILED">FAILED</SelectItem>
+                <SelectItem value="REFUNDED">REFUNDED</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Pickup Location</Label>
+            <Input
+              className="col-span-3"
+              value={editedRental.pickup_location}
+              onChange={(e) => setEditedRental({ ...editedRental, pickup_location: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Pickup Date</Label>
+            <Input
+              className="col-span-3"
+              type="date"
+              value={editedRental.pickup_date}
+              onChange={(e) => setEditedRental({ ...editedRental, pickup_date: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Pickup Time</Label>
+            <Input
+              className="col-span-3"
+              type="time"
+              value={editedRental.pickup_time}
+              onChange={(e) => setEditedRental({ ...editedRental, pickup_time: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Total Price</Label>
+            <Input
+              className="col-span-3"
+              type="number"
+              value={editedRental.total_price}
+              onChange={(e) => setEditedRental({ ...editedRental, total_price: parseFloat(e.target.value) })}
+            />
+          </div>
+          {editedRental.discounted_price && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Discounted Price</Label>
+              <Input
+                className="col-span-3"
+                type="number"
+                value={editedRental.discounted_price}
+                onChange={(e) => setEditedRental({ ...editedRental, discounted_price: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ViewRentalDialog({ rental, open, onOpenChange }: ViewRentalDialogProps) {
+  const [paymentDetails, setPaymentDetails] = useState<any>(null);
+  const [userDetails, setUserDetails] = useState<any>(null);
+
+  useEffect(() => {
+    if (rental) {
+      fetchAdditionalDetails(rental.id, rental.user_id);
+    }
+  }, [rental]);
+
+  const fetchAdditionalDetails = async (rentalId: string, userId: string) => {
+    try {
+      // Fetch payment details from rental_payments table
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('rental_payments')
+        .select('*')
+        .eq('booking_id', rentalId)
+        .single();
+
+      if (paymentError) throw paymentError;
+      setPaymentDetails(paymentData);
+
+      // Fetch user details
+      const { data: userData, error: userError } = await supabase
+        .from('all_users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (userError) throw userError;
+      setUserDetails(userData);
+    } catch (error) {
+      console.error('Error fetching additional details:', error);
+    }
+  };
+  if (!rental) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Rental Details</DialogTitle>
+          <DialogDescription>
+            Complete information about the vehicle rental
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-6 py-4">
+          {/* Rental Information */}
+          <div className="grid gap-4">
+            <h3 className="text-lg font-semibold">Rental Information</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Rental ID</Label>
+                <div className="mt-1 text-sm">{rental.rental_code}</div>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <div className="mt-1">
+                  <Badge variant={getStatusColor(rental.status)}>
+                    {rental.status}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <Label>Pickup Date</Label>
+                <div className="mt-1 text-sm">
+                  {new Date(rental.pickup_date).toLocaleDateString()}
+                </div>
+              </div>
+              <div>
+                <Label>Pickup Time</Label>
+                <div className="mt-1 text-sm">
+                  {rental.pickup_time}
+                </div>
+              </div>
+              <div>
+                <Label>Pickup Location</Label>
+                <div className="mt-1 text-sm">{rental.pickup_location}</div>
+              </div>
+
+              {/* Destinations List */}
+              <div className="col-span-2">
+                <Label>Destinations</Label>
+                <div className="mt-1 text-sm">
+                  <ul className="list-disc pl-5 space-y-1">
+                    {[
+                      rental.destination_1_location,
+                      rental.destination_2_location,
+                      rental.destination_3_location,
+                      rental.destination_4_location,
+                      rental.destination_5_location,
+                      rental.destination_6_location,
+                      rental.destination_7_location,
+                      rental.destination_8_location,
+                      rental.destination_9_location,
+                      rental.destination_10_location
+                    ].filter(Boolean).map((destination, index) => (
+                      <li key={index}>{destination}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              {/* {rental.destination_1_location && (
+                <div>
+                  <Label>Stop 1</Label>
+                  <div className="mt-1 text-sm">{rental.destination_1_location}</div>
+                </div>
+              )}
+              {rental.destination_2_location && (
+                <div>
+                  <Label>Stop 2</Label>
+                  <div className="mt-1 text-sm">{rental.destination_2_location}</div>
+                </div>
+              )}
+              {rental.destination_3_location && (
+                <div>
+                  <Label>Stop 3</Label>
+                  <div className="mt-1 text-sm">{rental.destination_3_location}</div>
+                </div>
+              )}
+              {rental.destination_4_location && (
+                <div>
+                  <Label>Stop 4</Label>
+                  <div className="mt-1 text-sm">{rental.destination_4_location}</div>
+                </div>
+              )}
+              {rental.destination_5_location && (
+                <div>
+                  <Label>Stop 5</Label>
+                  <div className="mt-1 text-sm">{rental.destination_5_location}</div>
+                </div>
+              )}
+              {rental.destination_6_location && (
+                <div>
+                  <Label>Stop 6</Label>
+                  <div className="mt-1 text-sm">{rental.destination_6_location}</div>
+                </div>
+              )}
+              {rental.destination_7_location && (
+                <div>
+                  <Label>Stop 7</Label>
+                  <div className="mt-1 text-sm">{rental.destination_7_location}</div>
+                </div>
+              )}
+              {rental.destination_8_location && (
+                <div>
+                  <Label>Stop 8</Label>
+                  <div className="mt-1 text-sm">{rental.destination_8_location}</div>
+                </div>
+              )}
+              {rental.destination_9_location && (
+                <div>
+                  <Label>Stop 9</Label>
+                  <div className="mt-1 text-sm">{rental.destination_9_location}</div>
+                </div>
+              )}
+              {rental.destination_10_location && (
+                <div>
+                  <Label>Stop 10</Label>
+                  <div className="mt-1 text-sm">{rental.destination_10_location}</div>
+                </div>
+              )} */}
+              <div>
+                <Label>Total Price</Label>
+                <div className="mt-1 text-sm">₹{rental.total_price.toFixed(2)}</div>
+              </div>
+              <div>
+                <Label>Payment Status</Label>
+                <div className="mt-1">
+                  <Badge variant={rental.payment_status === "COMPLETED" ? "default" : "secondary"}>
+                    {rental.payment_status}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Information */}
+          <div className="grid gap-4">
+            <h3 className="text-lg font-semibold">Customer Information</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Name</Label>
+                <div className="mt-1 text-sm">
+                  {`${rental.user.first_name} ${rental.user.last_name}`}
+                </div>
+              </div>
+              <div>
+                <Label>Email</Label>
+                <div className="mt-1 text-sm">{rental.user.email}</div>
+              </div>
+              {userDetails && (
+                <>
+                  <div>
+                    <Label>Phone</Label>
+                    <div className="mt-1 text-sm">{userDetails.phone}</div>
+                  </div>
+                  <div>
+                    <Label>Gender</Label>
+                    <div className="mt-1 text-sm capitalize">{userDetails.gender}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Payment Information */}
+          {paymentDetails && (
+            <div className="grid gap-4">
+              <h3 className="text-lg font-semibold">Payment Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Payment Method</Label>
+                  <div className="mt-1 text-sm capitalize">{paymentDetails.payment_method}</div>
+                </div>
+                <div>
+                  <Label>Transaction ID</Label>
+                  <div className="mt-1 text-sm">{paymentDetails.transaction_id}</div>
+                </div>
+                <div>
+                  <Label>Created On</Label>
+                  <div className="mt-1 text-sm">
+                    {new Date(paymentDetails.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <Label>Amount Payable</Label>
+                  <div className="mt-1 text-sm">₹{paymentDetails.amount.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
     case "completed":
@@ -73,12 +507,23 @@ interface Rental {
   id: string;
   rental_code: string;
   user_id: string;
-  vehicle_id: string;
-  start_date: string;
-  end_date: string;
+  vehicle_category: string;
+  pickup_date: string;
+  pickup_time: string;
   pickup_location: string;
-  dropoff_location: string;
+  pickup_place_id: string;
+  destination_1_location?: string;
+  destination_2_location?: string;
+  destination_3_location?: string;
+  destination_4_location?: string;
+  destination_5_location?: string;
+  destination_6_location?: string;
+  destination_7_location?: string;
+  destination_8_location?: string;
+  destination_9_location?: string;
+  destination_10_location?: string;
   total_price: number;
+  discounted_price?: number;
   status: string;
   payment_status: string;
   created_at: string;
@@ -87,11 +532,6 @@ interface Rental {
     first_name: string;
     last_name: string;
     email: string;
-  };
-  vehicle: {
-    make: string;
-    model: string;
-    license_plate: string;
   };
 }
 
@@ -105,10 +545,19 @@ export function RentalsTable() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedRental, setSelectedRental] = useState<Rental | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
     checkAdminAndFetchRentals();
   }, []);
+
+  const handleSaveRental = (updatedRental: Rental) => {
+    setRentals(prevRentals =>
+      prevRentals.map(rental =>
+        rental.id === updatedRental.id ? updatedRental : rental
+      )
+    );
+  };
 
   const checkAdminAndFetchRentals = async () => {
     try {
@@ -130,7 +579,7 @@ export function RentalsTable() {
   const fetchRentals = async () => {
     try {
       setIsRefreshing(true);
-      const { data, error } = await supabase
+      const { data: bookingsData, error: bookingsError } = await supabase
         .from('rental_booking')
         .select(`
           *,
@@ -138,24 +587,49 @@ export function RentalsTable() {
             first_name,
             last_name,
             email
+          ),
+          destination_1_location,
+          destination_2_location,
+          destination_3_location,
+          destination_4_location,
+          destination_5_location,
+          destination_6_location,
+          destination_7_location,
+          destination_8_location,
+          destination_9_location,
+          destination_10_location,
+          discounted_price,
+          rental_payments (
+            status
           )
         `);
 
-      if (error) throw error;
+      if (bookingsError) throw bookingsError;
 
       // Transform the data to match our interface
-      const rentalsData = data?.map(booking => ({
+      const rentalsData = bookingsData?.map(booking => ({
         id: booking.id,
         rental_code: booking.order_code,
         user_id: booking.user_id,
-        vehicle_id: booking.vehicle_category,
-        start_date: booking.pickup_date,
-        end_date: booking.pickup_date,
+        vehicle_category: booking.vehicle_category,
+        pickup_date: booking.pickup_date,
+        pickup_time: booking.pickup_time,
         pickup_location: booking.pickup_location,
-        dropoff_location: booking.destination_1_location || booking.pickup_location,
+        pickup_place_id: booking.pickup_place_id,
+        destination_1_location: booking.destination_1_location,
+        destination_2_location: booking.destination_2_location,
+        destination_3_location: booking.destination_3_location,
+        destination_4_location: booking.destination_4_location,
+        destination_5_location: booking.destination_5_location,
+        destination_6_location: booking.destination_6_location,
+        destination_7_location: booking.destination_7_location,
+        destination_8_location: booking.destination_8_location,
+        destination_9_location: booking.destination_9_location,
+        destination_10_location: booking.destination_10_location,
         total_price: booking.total_price,
+        discounted_price: booking.discounted_price,
         status: booking.status,
-        payment_status: booking.payments?.[0]?.status || 'pending',
+        payment_status: booking.rental_payments[0]?.status || 'PENDING',
         created_at: booking.created_at,
         updated_at: booking.updated_at,
         user: {
@@ -197,9 +671,6 @@ export function RentalsTable() {
       rental.user?.last_name,
       `${rental.user?.first_name} ${rental.user?.last_name}`,
       rental.user?.email,
-      rental.vehicle?.make,
-      rental.vehicle?.model,
-      rental.vehicle?.license_plate,
       rental.status,
       rental.payment_status
     ].filter(Boolean).join(' ').toLowerCase();
@@ -241,7 +712,8 @@ export function RentalsTable() {
   }
 
   return (
-    <Card>
+    <>
+      <Card>
       <CardHeader>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -401,7 +873,18 @@ export function RentalsTable() {
                         {rental.status.toLowerCase()}
                       </Badge>
                     </TableCell>
-                    <TableCell>₹{rental.total_price.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {rental.discounted_price ? (
+                        <>
+                          <span className="line-through text-muted-foreground mr-2">
+                            ₹{rental.total_price.toFixed(2)}
+                          </span>
+                          ₹{rental.discounted_price.toFixed(2)}
+                        </>
+                      ) : (
+                        `₹${rental.total_price.toFixed(2)}`
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -417,6 +900,12 @@ export function RentalsTable() {
                             setIsViewDialogOpen(true);
                           }}>
                             View details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => {
+                            setSelectedRental(rental);
+                            setIsEditDialogOpen(true);
+                          }}>
+                            Edit rental
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {rental.status === "upcoming" && (
@@ -454,6 +943,18 @@ export function RentalsTable() {
           </Button>
         </div>
       </CardFooter>
-    </Card>
+      </Card>
+      <ViewRentalDialog
+        rental={selectedRental}
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+      />
+      <EditRentalDialog
+        rental={selectedRental}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSave={handleSaveRental}
+      />
+    </>
   );
 }
